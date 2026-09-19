@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Map-first：底部行程面板高度。地圖控制項與 attribution 要避開它
+       （固定採用 peek 高度，面板展開／收合時控制項才不會跟著跳動） */
+    --tp-panel-h: clamp(220px, 40vh, 420px);
+    --tp-panel-h-expanded: 85vh;
+
+    /* SchedulePanel 目前的實際尺寸（由面板自己量測後寫入，供地圖計算可視區域） */
+    --tp-panel-current-h: 0px;
+    --tp-panel-current-w: 0px;
+  }
+
+  /* iOS Safari 的網址列會讓 100vh 大於可視高度，支援 dvh 時改用 dvh */
+  @supports (height: 100dvh) {
+    :root {
+      --tp-panel-h: clamp(220px, 40dvh, 420px);
+      --tp-panel-h-expanded: 85dvh;
+    }
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-800 antialiased;
+  }
+}
+
+@layer components {
+  /* 地圖上的自訂 Marker（由 MapView 以 divIcon 產生） */
+  .tp-marker {
+    @apply flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-sm font-bold text-white shadow-lg transition-transform;
+  }
+
+  .tp-marker--active {
+    @apply scale-125 ring-4 ring-white/70;
+  }
+
+  /* 整個子行程被聚焦：組內每個 marker 都標示，但比單點選取輕 */
+  .tp-marker--focused {
+    @apply scale-110 ring-2 ring-white/80;
+  }
+}
+
+/* Map-first：Leaflet 控制項與 attribution 預設貼著容器邊緣，
+   這裡讓它們避開上方的浮動列與下方的行程面板（數值由 App 設定） */
+.leaflet-top {
+  padding-top: var(--tp-map-inset-top, 0px);
+}
+
+.leaflet-bottom {
+  padding-bottom: var(--tp-map-inset-bottom, 0px);
+}
+
+.leaflet-right {
+  padding-right: var(--tp-map-inset-right, 0px);
+}
+
+/* Leaflet 內建樣式微調 */
+.leaflet-container {
+  @apply font-sans;
+  background: #e2e8f0;
+}
+
+.leaflet-popup-content-wrapper {
+  @apply rounded-xl shadow-xl;
+}
+
+.leaflet-popup-content {
+  @apply my-2 mx-3;
+}
