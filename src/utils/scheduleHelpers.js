@@ -1,35 +1,53 @@
 import { INVALID_URL_MESSAGE, isGoogleMapsUrl } from '../utils/googleMaps'
+import {
+  DEFAULT_CATEGORY,
+  MINUTES_PER_DAY,
+  coerceDayOffset,
+  getPlaceMinutes,
+  isValidDuration,
+  isValidLat,
+  isValidLng,
+  toMinutes,
+  toTimeString,
+} from './placeFields'
 
 /**
  * 行程時間相關的純函式，Map / Timeline / reducer 共用。
  * 這裡不碰 React，也不碰任何 state。
+ *
+ * 欄位的格式規則與合法範圍一律來自 placeFields（表單與 storage 共用同一份），
+ * 這個模組只負責「用那些規則做事」：推算結束時間、排序、產生 id、整理表單輸入。
  */
 
-/** 'HH:mm' → 當天的分鐘數；格式不合法回傳 null */
-export function toMinutes(time) {
-  if (typeof time !== 'string') return null
-  const match = time.match(/^(\d{1,2}):(\d{2})$/)
-  if (!match) return null
+// 規則本身放在 placeFields，但既有 import 路徑（含 components）都指向這裡，所以繼續 re-export
+export { getPlaceMinutes, toMinutes, toTimeString }
 
-  const hour = Number(match[1])
-  const minute = Number(match[2])
-  if (hour > 23 || minute > 59) return null
-  return hour * 60 + minute
+/**
+ * 結束時間：回傳 { time, dayOffset }，null 代表沒有可用的開始時間。
+ *
+ * 跨午夜時 dayOffset 會比開始時間大，例如 23:30 停留 90 分鐘
+ * → { time: '01:00', dayOffset: 1 }。只回 'HH:mm' 的話呼叫端無從得知是隔天。
+ */
+export function getPlaceEnd(place) {
+  const start = getPlaceMinutes(place)
+  if (start === null) return null
+
+  const end = start + (Number(place?.duration) || 0)
+  return { time: toTimeString(end), dayOffset: Math.floor(end / MINUTES_PER_DAY) }
 }
 
-/** 分鐘數 → 'HH:mm'（跨日會自動回到 00:00 起算） */
-export function toTimeString(minutes) {
-  const safe = ((Math.round(minutes) % 1440) + 1440) % 1440
-  const hour = String(Math.floor(safe / 60)).padStart(2, '0')
-  const minute = String(safe % 60).padStart(2, '0')
-  return `${hour}:${minute}`
+/** 顯示用的時間字串；翌日的項目帶「翌日」前綴，沒有時間回空字串 */
+export function formatPlaceTime(place) {
+  const time = typeof place?.time === 'string' ? place.time : ''
+  if (!time) return ''
+  return coerceDayOffset(place?.dayOffset) > 0 ? `翌日 ${time}` : time
 }
 
-/** 由開始時間與停留分鐘數推算結束時間 */
-export function getEndTime(place) {
-  const start = toMinutes(place?.time)
-  if (start === null) return ''
-  return toTimeString(start + (Number(place.duration) || 0))
+/** 顯示用的結束時間字串，規則與 formatPlaceTime 一致 */
+export function formatPlaceEnd(place) {
+  const end = getPlaceEnd(place)
+  if (!end) return ''
+  return end.dayOffset > 0 ? `翌日 ${end.time}` : end.time
 }
 
 /** 分鐘數 → 顯示字串，例如 90 → '1h 30m' */
@@ -44,35 +62,45 @@ export function formatDuration(minutes) {
   return `${hours}h ${rest}m`
 }
 
-/** 依開始時間排序，時間不合法的排到最後，同時間維持原順序 */
-export function sortByTime(places) {
-  return [...places].sort((a, b) => {
-    const left = toMinutes(a.time)
-    const right = toMinutes(b.time)
-    if (left === null && right === null) return 0
-    if (left === null) return 1
-    if (right === null) return -1
-    return left - right
-  })
+/**
+ * 產生 id。
+ *
+ * 用 UUID 而不是「時間戳 + module 內的流水號」：流水號在重新載入後會歸零，
+ * 而 defaultTrip 的 id 是寫死的，所以兩份源自同一份範本的行程必定撞 id。
+ * 現在還沒有匯入／同步功能，但等有了才換就得處理既有資料的衝突，
+ * 現在換則完全沒有遷移成本（舊 id 本身仍然有效，只是新產生的不再碰撞）。
+ *
+ * crypto.randomUUID 需要 secure context：用內網 IP（http://192.168.x.x:5173）
+ * 開 dev server 時它是 undefined，所以保留 getRandomValues 的回退路徑
+ *（getRandomValues 在非 secure context 也能用）。
+ */
+function randomId() {
+  if (typeof crypto !== 'undefined') {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+
+    if (typeof crypto.getRandomValues === 'function') {
+      const bytes = crypto.getRandomValues(new Uint8Array(16))
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    }
+  }
+
+  // 連 crypto 都沒有的環境（極舊瀏覽器 / 非瀏覽器）才會走到這裡
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 /** 產生行程點的唯一 id */
-let sequence = 0
 export function createScheduleId() {
-  sequence += 1
-  return `sch-${Date.now().toString(36)}-${sequence.toString(36)}`
+  return `sch-${randomId()}`
 }
 
 /** 產生天數的唯一 id */
 export function createDayId() {
-  sequence += 1
-  return `day-${Date.now().toString(36)}-${sequence.toString(36)}`
+  return `day-${randomId()}`
 }
 
 /** 產生子行程的唯一 id */
 export function createSubItineraryId() {
-  sequence += 1
-  return `sub-${Date.now().toString(36)}-${sequence.toString(36)}`
+  return `sub-${randomId()}`
 }
 
 /**
@@ -85,9 +113,11 @@ export function normalizeSchedule(values) {
 
   return {
     time: values.time,
+    // 表單用 checkbox 收這個欄位，所以這裡接受 boolean 也接受數字
+    dayOffset: values.dayOffset ? 1 : 0,
     name: values.name.trim(),
     nameLocal: (values.nameLocal ?? '').trim(),
-    category: values.category || 'sightseeing',
+    category: values.category || DEFAULT_CATEGORY,
     duration: Math.max(0, Number(values.duration) || 0),
     note: (values.note ?? '').trim(),
     position: [lat, lng],
@@ -99,24 +129,15 @@ export function normalizeSchedule(values) {
 export function validateSchedule(values) {
   const errors = {}
 
+  // 資料層允許空時間（舊資料可能沒有），但表單一律要求填寫
   if (toMinutes(values.time) === null) errors.time = '請輸入有效時間（HH:mm）'
   if (!values.name?.trim()) errors.name = '請輸入地點名稱'
 
-  const duration = Number(values.duration)
-  if (!Number.isFinite(duration) || duration < 0) errors.duration = '停留時間需為 0 以上的數字'
+  if (!isValidDuration(values.duration)) errors.duration = '停留時間需為 0 以上的數字'
 
   // 座標一律由地點搜尋帶入，使用者不會手動輸入
-  const lat = Number(values.lat)
-  const lng = Number(values.lng)
   const hasValidPosition =
-    values.lat !== '' &&
-    values.lng !== '' &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180
+    values.lat !== '' && values.lng !== '' && isValidLat(values.lat) && isValidLng(values.lng)
 
   if (!hasValidPosition) {
     errors.location = '請用「Search Place」選擇地點，或貼上含座標的 Google Maps 連結'

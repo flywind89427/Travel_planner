@@ -3,7 +3,8 @@ import Modal from './Modal'
 import PlaceSearchField from './PlaceSearchField'
 import GoogleMapsLinkField from './GoogleMapsLinkField'
 import { CATEGORIES } from '../data/defaultTrip'
-import { getEndTime, toMinutes, validateSchedule } from '../utils/scheduleHelpers'
+import { formatPlaceEnd, getPlaceEnd, toMinutes, validateSchedule } from '../utils/scheduleHelpers'
+import { MAX_DAY_OFFSET } from '../utils/placeFields'
 
 
 /**
@@ -20,9 +21,12 @@ export function buildAddValues(places = []) {
   // 時間是選填，最後一筆可能沒有時間；往回找最後一個「有時間」的地點當基準，
   // 都沒有就從 09:00 開始（不能讓預設值變成空字串，否則表單一開就是無效的）
   const last = [...places].reverse().find((place) => toMinutes(place?.time) !== null)
+  const end = last ? getPlaceEnd(last) : null
 
   return {
-    time: last ? getEndTime(last) : '09:00',
+    time: end ? end.time : '09:00',
+    // 前一筆行程跨過午夜時，新的一筆預設就落在翌日
+    dayOffset: end ? Math.min(end.dayOffset, MAX_DAY_OFFSET) : 0,
     duration: 60,
     name: '',
     nameLocal: '',
@@ -38,6 +42,7 @@ export function buildAddValues(places = []) {
 export function buildEditValues(place) {
   return {
     time: place.time,
+    dayOffset: place.dayOffset ?? 0,
     duration: place.duration ?? 0,
     name: place.name,
     nameLocal: place.nameLocal ?? '',
@@ -86,13 +91,19 @@ function EditScheduleModal({ mode, initialValues, onSubmit, onClose }) {
 
   const isEdit = mode === 'edit'
   const previewEnd = useMemo(
-    () => getEndTime({ time: values.time, duration: values.duration }),
-    [values.time, values.duration],
+    () => formatPlaceEnd({ time: values.time, duration: values.duration, dayOffset: values.dayOffset }),
+    [values.time, values.duration, values.dayOffset],
   )
 
   const setField = (field) => (event) => {
     const { value } = event.target
     setValues((current) => ({ ...current, [field]: value }))
+  }
+
+  // dayOffset 在資料層是 0 / 1，表單用 checkbox 收
+  const setDayOffset = (event) => {
+    const { checked } = event.target
+    setValues((current) => ({ ...current, dayOffset: checked ? 1 : 0 }))
   }
 
   const hasCoordinates = values.lat !== '' && values.lng !== '' && values.lat !== null
@@ -161,9 +172,23 @@ function EditScheduleModal({ mode, initialValues, onSubmit, onClose }) {
           </Field>
         </div>
 
-        <p className="-mt-1 text-xs text-slate-400">
-          結束時間 {previewEnd || '—'}
-        </p>
+        {/* 翌日切換與結束時間預覽同一列：改了 checkbox 馬上看得到結束時間跟著變 */}
+        <div className="-mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <label className="inline-flex items-center gap-2 text-xs text-slate-500">
+            <input
+              type="checkbox"
+              checked={Boolean(values.dayOffset)}
+              onChange={setDayOffset}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            <span>
+              時間屬於<span className="font-medium text-slate-600">翌日</span>
+              <span className="ml-1 text-slate-400">（跨午夜的深夜行程）</span>
+            </span>
+          </label>
+
+          <p className="text-xs text-slate-400">結束時間 {previewEnd || '—'}</p>
+        </div>
 
         {/* 地點輸入區：兩種方式擇一，座標最後都寫回同一份表單草稿 */}
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">

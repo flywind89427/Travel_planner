@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { CATEGORIES } from '../data/defaultTrip'
-import { formatDuration } from '../utils/scheduleHelpers'
-import { getItemTime } from '../utils/dayItems'
+import { formatDuration, formatPlaceTime } from '../utils/scheduleHelpers'
+import { getItemPlace } from '../utils/dayItems'
 import ScheduleItemActions from './ScheduleItemActions'
 
 /**
@@ -63,7 +63,11 @@ function SubItineraryItem({
   const showChildren = isExpanded && !isDragCollapsed
   const category = CATEGORIES[subItinerary.category] ?? CATEGORIES.sightseeing
   const duration = formatDuration(subItinerary.duration)
-  const time = getItemTime(subItinerary)
+  // 代表時間取自第一個 child（只用於顯示，不寫回資料）
+  const timePlace = getItemPlace(subItinerary)
+  const time = timePlace?.time ?? ''
+  // 左側時間欄很窄，「翌日」另起一行，與 ScheduleItem 的呈現一致
+  const isNextDay = Number(timePlace?.dayOffset) > 0
   const places = subItinerary.places
 
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
@@ -85,6 +89,9 @@ function SubItineraryItem({
       {/* 沒有 child 時不顯示代表時間，也不會自行產生時間 */}
       <time className="absolute left-0 top-3.5 w-9 text-right text-xs font-semibold tabular-nums text-slate-500 sm:w-16 sm:text-sm">
         {time || '--:--'}
+        {isNextDay && (
+          <span className="block text-[10px] font-medium leading-tight text-indigo-500">翌日</span>
+        )}
       </time>
 
       <span
@@ -226,7 +233,7 @@ function SubItineraryItem({
                             hasError ? 'text-red-600' : 'text-slate-400'
                           }`}
                         >
-                          {place.time}
+                          {formatPlaceTime(place)}
                         </span>
                       )}
                     </>
