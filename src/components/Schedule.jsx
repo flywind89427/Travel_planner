@@ -50,6 +50,7 @@ import { flattenPlaces, getItemColors, getItemId, getScheduleNumbers, isSubItine
  */
 function Schedule({
   day,
+  timeZone,
   selectedScheduleId,
   onSelectSchedule,
   onAddSchedule,
@@ -156,8 +157,9 @@ function Schedule({
 
   /** 出發時間：Day 日期 + 起點時間（起點沒時間就退回 09:00），邏輯集中在 transitTime */
   const routeDeparture = useMemo(
-    () => (routeFrom ? buildDepartureTime(day?.date, routeFrom) : null),
-    [day?.date, routeFrom],
+    () =>
+      routeFrom ? buildDepartureTime({ dayDate: day?.date, fromPlace: routeFrom, timeZone }) : null,
+    [day?.date, routeFrom, timeZone],
   )
 
   const handleQueryRoute = async (mode = DEPARTURE_MODE.SCHEDULE) => {
@@ -167,7 +169,13 @@ function Schedule({
     const token = routeQueryToken.current
     setRouteQuery({ status: 'loading', result: null })
 
-    const result = await fetchTransitTime({ from: routeFrom, to: routeTo, dayDate: day?.date, mode })
+    const result = await fetchTransitTime({
+      from: routeFrom,
+      to: routeTo,
+      dayDate: day?.date,
+      timeZone,
+      mode,
+    })
     if (token !== routeQueryToken.current) return
     setRouteQuery({ status: 'done', result })
   }

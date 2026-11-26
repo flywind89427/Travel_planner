@@ -29,6 +29,48 @@ export const MINUTES_PER_DAY = 1440
  */
 export const MAX_DAY_OFFSET = 1
 
+/**
+ * 行程所在地的時區（IANA 名稱，例如 'Asia/Tokyo'）。
+ *
+ * place 的 time 只是「牆上時間」，本身沒有時區。要把它變成一個明確的時刻
+ *（接 Transitous 這類外部服務時必須），就得知道那面牆在哪個時區。
+ *
+ * 這個預設值不是隨便挑的：v3 以前沒有時區欄位，transitTime.js 把 'Asia/Tokyo'
+ * 寫死在常數裡，所以既有資料的語意本來就是東京當地時間——v3 → v4 的遷移
+ * 補上這個值是忠實還原，不是猜測。
+ */
+export const DEFAULT_TIME_ZONE = 'Asia/Tokyo'
+
+/** 用 Intl 驗證：無效的時區名稱會讓 DateTimeFormat 丟 RangeError */
+export function isValidTimezone(value) {
+  if (typeof value !== 'string' || value === '') return false
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 某個時刻在該時區的 UTC 偏移，例如 '+09:00'。無法判定時回 '+00:00'。
+ *
+ * 偏移一律從時區名稱推算、不另存欄位：兩個值分開存就得手動保持一致，
+ * 而且有日光節約的地區偏移會隨日期變，固定偏移會錯一小時。
+ * 所以呼叫端要傳「關心的那個時刻」，而不是永遠用現在。
+ */
+export function getUtcOffset(timeZone, instant = new Date()) {
+  if (!isValidTimezone(timeZone) || Number.isNaN(instant?.getTime?.())) return '+00:00'
+
+  const name = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
+    .formatToParts(instant)
+    .find((part) => part.type === 'timeZoneName')?.value
+
+  // 'GMT+09:00' / 'GMT-05:00' / 'GMT'（UTC 本身沒有偏移數字）
+  const match = /GMT([+-]\d{2}:\d{2})/.exec(name ?? '')
+  return match ? match[1] : '+00:00'
+}
+
 /** 'HH:mm' → 當天的分鐘數；格式不合法回傳 null */
 export function toMinutes(time) {
   if (typeof time !== 'string') return null
@@ -99,6 +141,8 @@ export const coerceDuration = (value) => (isValidDuration(value) ? Number(value)
 export const coerceDayOffset = (value) => (isValidDayOffset(value) ? Number(value) : 0)
 export const coerceCategory = (value) => (isValidCategory(value) ? value : DEFAULT_CATEGORY)
 export const coerceText = (value) => (typeof value === 'string' ? value : '')
+// 時區不回退成空字串：少了它所有 'HH:mm' 就失去明確語意，外部查詢也無從換算
+export const coerceTimezone = (value) => (isValidTimezone(value) ? value : DEFAULT_TIME_ZONE)
 
 /**
  * place 的絕對分鐘數：以該 day 的 00:00 為原點，翌日 01:30 → 1530。
