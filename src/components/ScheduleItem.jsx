@@ -48,6 +48,8 @@ function ScheduleItem({
 }) {
   const category = CATEGORIES[place.category] ?? CATEGORIES.sightseeing
   const duration = formatDuration(place.duration)
+  // 'HH:mm' 看不出是不是跨午夜的深夜行程，所以時間下面補一個「翌日」標記
+  const isNextDay = Number(place.dayOffset) > 0
   const itemRef = useRef(null)
 
   const isRouteSelected = Boolean(routeRole)
@@ -101,6 +103,9 @@ function ScheduleItem({
         }`}
       >
         {place.time || '--:--'}
+        {isNextDay && (
+          <span className="block text-[10px] font-medium leading-tight text-indigo-500">翌日</span>
+        )}
       </time>
 
       {/* 時間軸圓點就是行程編號；中心對齊連接線（49px / 79px） */}

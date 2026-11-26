@@ -1,5 +1,5 @@
-import { toMinutes } from './scheduleHelpers'
-import { CATEGORIES } from '../data/defaultTrip'
+import { getPlaceMinutes } from './placeFields'
+import { CATEGORIES } from '../data/categories'
 
 /**
  * Day 的行程單位（item）。
@@ -60,21 +60,32 @@ export function flattenPlaces(items) {
 }
 
 /**
- * 顯示用的代表時間。
+ * 代表這個 item 時間的 place。
  *
- * 子行程本身沒有 time，畫面上用第一個 child 的 time 代表；
- * 沒有 child 就回傳空字串，不會自行產生時間，也不會寫回資料。
+ * 子行程本身沒有 time / dayOffset，一律以第一個 child 代表；
+ * 沒有 child 就回傳 null，不會自行產生時間，也不會寫回資料。
+ * 時間的顯示與排序都從這裡取，確保「顯示的時間」與「排序用的時間」是同一筆。
  */
+export function getItemPlace(item) {
+  if (isSubItinerary(item)) return item.places[0] ?? null
+  return item?.place ?? null
+}
+
+/** 顯示用的代表時間（只有 'HH:mm'，翌日與否要用 formatPlaceTime 判斷） */
 export function getItemTime(item) {
-  if (isSubItinerary(item)) return item.places[0]?.time ?? ''
-  return item.place?.time ?? ''
+  return getItemPlace(item)?.time ?? ''
+}
+
+/** 排序用的絕對分鐘數；已含 dayOffset，所以翌日 01:30 會大於當天 23:00 */
+export function getItemMinutes(item) {
+  return getPlaceMinutes(getItemPlace(item))
 }
 
 /** 依代表時間排序 items；沒有時間的排到最後，同時間維持原順序 */
 export function sortItemsByTime(items) {
   return [...items].sort((a, b) => {
-    const left = toMinutes(getItemTime(a))
-    const right = toMinutes(getItemTime(b))
+    const left = getItemMinutes(a)
+    const right = getItemMinutes(b)
     if (left === null && right === null) return 0
     if (left === null) return 1
     if (right === null) return -1

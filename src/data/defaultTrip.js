@@ -5,7 +5,9 @@ import { toPlaceItem } from '../utils/dayItems'
  *
  * 資料結構：
  * trip
- *  ├─ id / title / subtitle / startDate / endDate / cover
+ *  ├─ id / title / subtitle
+ *  │   日期區間不另存欄位：Header 一律從 days 的第一天與最後一天推導，
+ *  │   否則增刪天數後那兩個欄位就會與 days 不一致。
  *  └─ days[]
  *       ├─ id / dayNumber / date / description
  *       └─ items[]  一般地點與子行程混排
@@ -15,7 +17,10 @@ import { toPlaceItem } from '../utils/dayItems'
  * place
  *  ├─ id      唯一值，Map 與 Timeline 靠它互相對應
  *  ├─ time     開始時間 (HH:mm，選填)
- *  ├─ duration 停留分鐘數，結束時間由 getEndTime() 推算
+ *  ├─ dayOffset 0 = 當天、1 = 翌日（選填，預設 0）
+ *  │            深夜行程（居酒屋到凌晨、紅眼班機）靠這一欄表達；
+ *  │            排序與時間檢查一律用 getPlaceMinutes() 的絕對分鐘數
+ *  ├─ duration 停留分鐘數，結束時間由 getPlaceEnd() 推算
  *  ├─ name / nameLocal
  *  ├─ category  參考 CATEGORIES
  *  ├─ position  [lat, lng]
@@ -26,21 +31,14 @@ import { toPlaceItem } from '../utils/dayItems'
  * 目前先用附近車站或地標的座標佔位——在 App 裡用「編輯 → 搜尋地點」重選即可修正。
  */
 
-export const CATEGORIES = {
-  hotel: { label: '住宿', emoji: '🏨', color: '#8b5cf6' },
-  sightseeing: { label: '景點', emoji: '⛩️', color: '#337bf6' },
-  food: { label: '美食', emoji: '🍜', color: '#f97316' },
-  shopping: { label: '購物', emoji: '🛍️', color: '#ec4899' },
-  nature: { label: '自然', emoji: '🌳', color: '#10b981' },
-  transport: { label: '交通', emoji: '🚃', color: '#64748b' },
-}
+// 分類定義搬到 data/categories 以避免與 utils/dayItems 循環相依；
+// 這裡繼續 re-export，既有元件的 import 路徑不變
+export { CATEGORIES } from './categories'
 
 const rawTrip = {
   id: 'trip-tokyo-2026-12',
   title: 'Tokyo Trip',
   subtitle: '東京',
-  startDate: '2026-12-16',
-  endDate: '2026-12-22',
   days: [
     {
       id: 'day-1',

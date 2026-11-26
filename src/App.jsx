@@ -27,6 +27,8 @@ import { buildMapPlaces, flattenPlaces, isSubItinerary } from './utils/dayItems'
 function App() {
   const {
     trip,
+    canUndo,
+    undo,
     addSchedule,
     updateSchedule,
     deleteSchedule,
@@ -69,6 +71,29 @@ function App() {
 
   // 卸載時清掉還沒觸發的延後選取
   useEffect(() => () => window.clearTimeout(demoteTimerRef.current), [])
+
+  // Cmd/Ctrl+Z 復原。在輸入欄位裡交還給瀏覽器，
+  // 否則打字時按復原會變成「撤銷整筆行程修改」而不是「撤銷剛打的字」
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey) return
+      if (event.key.toLowerCase() !== 'z') return
+
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      undo()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [undo])
 
   const selectedDay = useMemo(
     () => trip.days.find((day) => day.id === selectedDayId) ?? trip.days[0],
@@ -233,7 +258,12 @@ function App() {
         ref={overlayRef}
         className="absolute inset-x-0 top-0 z-[1100] pt-[env(safe-area-inset-top)]"
       >
-        <Header trip={trip} onOpenSettings={dialogs.openSettings} />
+        <Header
+          trip={trip}
+          canUndo={canUndo}
+          onUndo={undo}
+          onOpenSettings={dialogs.openSettings}
+        />
 
         <DaySelector
           days={trip.days}

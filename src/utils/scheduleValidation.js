@@ -1,4 +1,5 @@
-import { toMinutes } from './scheduleHelpers'
+import { formatPlaceTime } from './scheduleHelpers'
+import { getPlaceMinutes } from './placeFields'
 
 /**
  * 行程時間檢查（純函式，與 UI 完全分離）。
@@ -6,6 +7,8 @@ import { toMinutes } from './scheduleHelpers'
  * 設計原則：
  *  - 「排序」與「時間」是兩份獨立資料，這裡只負責「發現問題」，
  *    絕對不修改任何時間，也不重新排序。
+ *  - 比較一律用 getPlaceMinutes() 的絕對分鐘數（已含 dayOffset），
+ *    所以「23:00 居酒屋 → 翌日 01:30 回飯店」不會被誤判成時間順序異常。
  *  - 結果一律即時計算，不寫進 trip、也不存進 LocalStorage。
  *  - 以 schedule.id 標記問題，不用 array index（拖曳後 index 會變）。
  *
@@ -63,7 +66,7 @@ export function validateScheduleTimes(schedules) {
   let previous = null
 
   for (const schedule of schedules) {
-    const minutes = toMinutes(schedule.time)
+    const minutes = getPlaceMinutes(schedule)
 
     if (minutes === null) {
       addIssue(issuesById, schedule.id, {
@@ -77,7 +80,7 @@ export function validateScheduleTimes(schedules) {
 
     if (previous) {
       if (minutes < previous.minutes) {
-        const detail = `時間順序異常：上一個行程為 ${previous.time}，這個行程為 ${schedule.time}`
+        const detail = `時間順序異常：上一個行程為 ${previous.time}，這個行程為 ${formatPlaceTime(schedule)}`
         addIssue(issuesById, previous.id, {
           type: ISSUE_TYPES.REVERSED,
           level: ISSUE_LEVEL.ERROR,
@@ -91,7 +94,7 @@ export function validateScheduleTimes(schedules) {
           detail,
         })
       } else if (minutes === previous.minutes) {
-        const detail = `與上一個行程「${previous.name}」的時間相同（${schedule.time}）`
+        const detail = `與上一個行程「${previous.name}」的時間相同（${formatPlaceTime(schedule)}）`
         addIssue(issuesById, previous.id, {
           type: ISSUE_TYPES.DUPLICATE,
           level: ISSUE_LEVEL.WARNING,
@@ -107,7 +110,7 @@ export function validateScheduleTimes(schedules) {
       }
     }
 
-    previous = { id: schedule.id, minutes, time: schedule.time, name: schedule.name }
+    previous = { id: schedule.id, minutes, time: formatPlaceTime(schedule), name: schedule.name }
   }
 
   const entries = Object.entries(issuesById)

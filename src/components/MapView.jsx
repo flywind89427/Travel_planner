@@ -3,7 +3,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { CATEGORIES } from '../data/defaultTrip'
 import { DEFAULT_COLOR } from '../utils/dayItems'
-import { getEndTime } from '../utils/scheduleHelpers'
+import { formatPlaceEnd, formatPlaceTime } from '../utils/scheduleHelpers'
 
 /** 單一景點時使用的預設縮放層級 */
 const SINGLE_PLACE_ZOOM = 15
@@ -350,7 +350,7 @@ function MapView({
                     <p className="text-xs text-slate-500">{place.nameLocal}</p>
                   )}
                   <p className="mt-1 text-xs font-medium text-brand-600">
-                    {place.time} – {getEndTime(place)}
+                    {formatPlaceTime(place)} – {formatPlaceEnd(place)}
                   </p>
                   {place.note && (
                     <p className="mt-1 text-xs text-slate-500">{place.note}</p>
