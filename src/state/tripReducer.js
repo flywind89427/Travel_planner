@@ -29,6 +29,7 @@ export const TRIP_ACTIONS = {
   UPDATE_SUB_ITINERARY: 'subItinerary/update',
   DELETE_SUB_ITINERARY: 'subItinerary/delete',
   REORDER_SUB_ITINERARY_PLACES: 'subItinerary/reorderPlaces',
+  UPDATE_TRIP: 'trip/update',
   UPDATE_DAY: 'day/update',
   REPLACE_DAYS: 'days/replace',
   REORDER_SCHEDULES: 'schedule/reorder',
@@ -139,6 +140,22 @@ export function tripReducer(state, action) {
     case TRIP_ACTIONS.SORT_SCHEDULES_BY_TIME: {
       const { dayId } = action
       return mapDay(state, dayId, (items) => sortItemsByTime(items))
+    }
+
+    /**
+     * trip 層欄位。
+     *
+     * 只收白名單內的 key，而不是把 values 整包展開——否則呼叫端可以塞進任何欄位，
+     * storage 的白名單會默默把它們丟掉，變成「改了卻沒存到」的靜默失敗。
+     * 之後要讓 title / subtitle 也可編輯，在這裡加一行即可。
+     */
+    case TRIP_ACTIONS.UPDATE_TRIP: {
+      const { values } = action
+      const next = { ...state }
+
+      if (typeof values?.timezone === 'string') next.timezone = values.timezone
+
+      return next
     }
 
     case TRIP_ACTIONS.UPDATE_DAY: {

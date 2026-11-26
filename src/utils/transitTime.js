@@ -1,4 +1,5 @@
 import { toMinutes } from './scheduleHelpers'
+import { DEFAULT_TIME_ZONE, getUtcOffset } from './placeFields'
 
 /**
  * 大眾運輸交通時間查詢（Transitous / MOTIS）。
@@ -17,14 +18,12 @@ const API_URL = 'https://api.transitous.org/api/v1/plan'
 const REQUEST_TIMEOUT_MS = 15000
 
 /**
- * 行程所在地的時區。
+ * 時區改由 trip.timezone 提供（IANA 名稱），不再寫死。
  *
- * 目前的資料模型沒有時區欄位，第一版固定用東京當地時間（UTC+9，沒有日光節約）。
- * 時區只在這裡定義，不要散落到元件裡；之後若 trip 加上時區欄位，只改這一個地方。
- * 兩個常數必須代表同一個時區。
+ * UTC 偏移一律用 getUtcOffset() 從時區名稱推算，而不是另存一個偏移常數：
+ * 兩個值分開存就得手動保持一致，而且固定偏移在有日光節約的地區會錯一小時。
+ * 呼叫端沒給時區時才退回 DEFAULT_TIME_ZONE（與 v3 資料的既有語意相同）。
  */
-const TRIP_UTC_OFFSET = '+09:00'
-const TRIP_TIME_ZONE = 'Asia/Tokyo'
 
 /** 起點沒有時間時使用的出發時間（當地時間） */
 const FALLBACK_DEPARTURE_TIME = '09:00'
@@ -71,10 +70,22 @@ function formatDepartureLabel(date, time) {
   return `${String(date ?? '').replace(/-/g, '/')} ${time}`
 }
 
+/**
+ * 出發時刻的 UTC 偏移。
+ *
+ * 探測點用「那一天的那個時間」而不是現在，因為有日光節約的地區偏移會隨日期變。
+ * 把牆上時間先當成 UTC 來探測，對非日光節約地區完全正確；已知限制是
+ * 日光節約切換當天、轉換時刻前後的偏移不同，這裡可能差一小時——
+ * 要完全精確得做兩段逼近，對行程規劃的用途不划算。
+ */
+function departureUtcOffset(timeZone, date, time) {
+  return getUtcOffset(timeZone, new Date(`${date}T${time}:00Z`))
+}
+
 /** 取得「現在」在行程當地的日期與時間，而不是使用者裝置所在時區的 */
-function nowInTripZone(now = new Date()) {
+function nowInTripZone(timeZone, now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TRIP_TIME_ZONE,
+    timeZone,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', hour12: false,
   }).formatToParts(now)
@@ -97,9 +108,15 @@ function nowInTripZone(now = new Date()) {
  * now：行程當地的現在時刻。注意這會查到「今天」的班表，
  *      若今天不是行程當天，平日／假日班表可能不同 —— matchesTripDate 讓 UI 能提醒。
  */
-export function buildDepartureTime(dayDate, fromPlace, mode = DEPARTURE_MODE.SCHEDULE, now = new Date()) {
+export function buildDepartureTime({
+  dayDate,
+  fromPlace,
+  timeZone = DEFAULT_TIME_ZONE,
+  mode = DEPARTURE_MODE.SCHEDULE,
+  now = new Date(),
+}) {
   const useNow = mode === DEPARTURE_MODE.NOW
-  const current = useNow ? nowInTripZone(now) : null
+  const current = useNow ? nowInTripZone(timeZone, now) : null
 
   const date = useNow ? current.date : dayDate
   const hasTime = toMinutes(fromPlace?.time) !== null
@@ -113,7 +130,7 @@ export function buildDepartureTime(dayDate, fromPlace, mode = DEPARTURE_MODE.SCH
     fallbackUsed: !useNow && !hasTime,
     matchesTripDate: date === dayDate,
     // 帶時區偏移送出，語意就是「行程當地的這個時刻」
-    iso: `${date}T${time}:00${TRIP_UTC_OFFSET}`,
+    iso: `${date}T${time}:00${departureUtcOffset(timeZone, date, time)}`,
     label: formatDepartureLabel(date, time),
   }
 }
@@ -279,11 +296,12 @@ export async function fetchTransitTime({
   from,
   to,
   dayDate,
+  timeZone = DEFAULT_TIME_ZONE,
   mode = DEPARTURE_MODE.SCHEDULE,
   fetchImpl = fetch,
   now = new Date(),
 }) {
-  const departure = buildDepartureTime(dayDate, from, mode, now)
+  const departure = buildDepartureTime({ dayDate, fromPlace: from, timeZone, mode, now })
   const url = buildPlanUrl(from, to, departure.iso)
 
   if (!url) {

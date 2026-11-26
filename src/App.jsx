@@ -36,6 +36,7 @@ function App() {
     updateSubItinerary,
     deleteSubItinerary,
     reorderSchedules,
+    updateTrip,
     updateDay,
     replaceDays,
     resetTrip,
@@ -281,6 +282,7 @@ function App() {
       >
         <Schedule
           day={selectedDay}
+          timeZone={trip.timezone}
           selectedScheduleId={selectedScheduleId}
           onSelectSchedule={handleSelectFromTimeline}
           onAddSchedule={dialogs.openAddSchedule}
@@ -367,6 +369,8 @@ function App() {
 
       {dialogs.isOpen(DIALOG.SETTINGS) && (
         <TripSettingsModal
+          timezone={trip.timezone}
+          onChangeTimezone={(timezone) => updateTrip({ timezone })}
           onManageDays={dialogs.openManageDays}
           onResetTrip={dialogs.openResetTrip}
           onClose={dialogs.close}

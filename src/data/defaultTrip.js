@@ -6,6 +6,9 @@ import { toPlaceItem } from '../utils/dayItems'
  * 資料結構：
  * trip
  *  ├─ id / title / subtitle
+ *  ├─ timezone  行程所在地的 IANA 時區（例如 'Asia/Tokyo'）
+ *  │   place 的 time 只是牆上時間，要換算成明確的時刻（接 Transitous 等外部服務）
+ *  │   就得靠這一欄。UTC 偏移由它推算，不另存，日光節約才不會算錯。
  *  │   日期區間不另存欄位：Header 一律從 days 的第一天與最後一天推導，
  *  │   否則增刪天數後那兩個欄位就會與 days 不一致。
  *  └─ days[]
@@ -39,6 +42,7 @@ const rawTrip = {
   id: 'trip-tokyo-2026-12',
   title: 'Tokyo Trip',
   subtitle: '東京',
+  timezone: 'Asia/Tokyo',
   days: [
     {
       id: 'day-1',

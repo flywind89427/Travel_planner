@@ -125,6 +125,11 @@ export function useTrip(fallbackTrip = defaultTrip) {
     dispatch({ type: TRIP_ACTIONS.SORT_SCHEDULES_BY_TIME, dayId })
   }, [])
 
+  /** trip 層欄位（目前只有 timezone） */
+  const updateTrip = useCallback((values) => {
+    dispatch({ type: TRIP_ACTIONS.UPDATE_TRIP, values })
+  }, [])
+
   const updateDay = useCallback((dayId, values) => {
     dispatch({ type: TRIP_ACTIONS.UPDATE_DAY, dayId, values })
   }, [])
@@ -158,6 +163,7 @@ export function useTrip(fallbackTrip = defaultTrip) {
     reorderSubItineraryPlaces,
     reorderSchedules,
     sortSchedulesByTime,
+    updateTrip,
     updateDay,
     replaceDays,
     resetTrip,
