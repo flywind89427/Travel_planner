@@ -75,6 +75,18 @@ function ScheduleItem({
     itemRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [isActive])
 
+
+  /**
+   * 只取 translate，不要用 CSS.Transform。
+   *
+   * dnd-kit 的 transform 除了位移還帶著 scaleX / scaleY，值是
+   * 「正懸停的那一項的尺寸 ÷ 被拖曳那一項的尺寸」（@dnd-kit/core 的 adjustScale）。
+   * 那是設計給 DragOverlay 的浮動複本用的——讓它變形成目標格子的大小。
+   * 這個專案沒有用 DragOverlay，scale 會直接套在清單裡的原始項目上，
+   * 於是拖過高度不同的項目時方塊就被壓扁或拉長。
+   */
+  const dragStyle = { transform: CSS.Translate.toString(transform), transition }
+
   // 同一個節點要同時給 dnd-kit 與 scrollIntoView 使用
   const setRefs = (node) => {
     itemRef.current = node
@@ -84,7 +96,7 @@ function ScheduleItem({
   return (
     <li
       ref={setRefs}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={dragStyle}
       className={`relative pl-16 sm:pl-24 ${isDragging ? 'z-10' : isMenuOpen ? 'z-20' : ''}`}
     >
       {/* 垂直連接線 */}
